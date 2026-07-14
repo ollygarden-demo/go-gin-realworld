@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/uptrace/opentelemetry-go-extra/otelgorm"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -57,6 +58,9 @@ func Init() *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
 	if err != nil {
 		fmt.Println("db err: (Init) ", err)
+	}
+	if err := db.Use(otelgorm.NewPlugin(otelgorm.WithDBName(dbPath), otelgorm.WithoutQueryVariables())); err != nil {
+		fmt.Println("db err: (Init - telemetry) ", err)
 	}
 	sqlDB, err := db.DB()
 	if err != nil {

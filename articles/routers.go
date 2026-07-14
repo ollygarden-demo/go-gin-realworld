@@ -5,6 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gothinkster/golang-gin-realworld-example-app/common"
 	"github.com/gothinkster/golang-gin-realworld-example-app/users"
+	"go.opentelemetry.io/otel/attribute"
 	"gorm.io/gorm"
 	"net/http"
 	"strconv"
@@ -46,6 +47,10 @@ func ArticleCreate(c *gin.Context) {
 	if err := SaveOne(&articleModelValidator.articleModel); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, common.NewError("database", err))
 		return
+	}
+	common.RecordProductAction(c, "article.create", attribute.Int("tag.count", len(articleModelValidator.articleModel.Tags)))
+	for _, tag := range articleModelValidator.articleModel.Tags {
+		common.RecordTagUse(c, tag.Tag)
 	}
 	serializer := ArticleSerializer{c, articleModelValidator.articleModel}
 	c.JSON(http.StatusCreated, gin.H{"article": serializer.Response()})
@@ -143,6 +148,7 @@ func ArticleDelete(c *gin.Context) {
 		c.JSON(http.StatusUnprocessableEntity, common.NewError("database", err))
 		return
 	}
+	common.RecordProductAction(c, "article.delete")
 	c.JSON(http.StatusOK, gin.H{"article": "delete success"})
 }
 
@@ -158,6 +164,7 @@ func ArticleFavorite(c *gin.Context) {
 		c.JSON(http.StatusUnprocessableEntity, common.NewError("database", err))
 		return
 	}
+	common.RecordProductAction(c, "article.favorite")
 	serializer := ArticleSerializer{c, articleModel}
 	c.JSON(http.StatusOK, gin.H{"article": serializer.Response()})
 }
@@ -174,6 +181,7 @@ func ArticleUnfavorite(c *gin.Context) {
 		c.JSON(http.StatusUnprocessableEntity, common.NewError("database", err))
 		return
 	}
+	common.RecordProductAction(c, "article.unfavorite")
 	serializer := ArticleSerializer{c, articleModel}
 	c.JSON(http.StatusOK, gin.H{"article": serializer.Response()})
 }
@@ -196,6 +204,7 @@ func ArticleCommentCreate(c *gin.Context) {
 		c.JSON(http.StatusUnprocessableEntity, common.NewError("database", err))
 		return
 	}
+	common.RecordProductAction(c, "comment.create")
 	serializer := CommentSerializer{c, commentModelValidator.commentModel}
 	c.JSON(http.StatusCreated, gin.H{"comment": serializer.Response()})
 }
@@ -222,6 +231,7 @@ func ArticleCommentDelete(c *gin.Context) {
 		c.JSON(http.StatusUnprocessableEntity, common.NewError("database", err))
 		return
 	}
+	common.RecordProductAction(c, "comment.delete")
 	c.JSON(http.StatusOK, gin.H{"comment": "delete success"})
 }
 

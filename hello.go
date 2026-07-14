@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 
 	"github.com/gothinkster/golang-gin-realworld-example-app/articles"
 	"github.com/gothinkster/golang-gin-realworld-example-app/common"
@@ -22,6 +25,18 @@ func Migrate(db *gorm.DB) {
 }
 
 func main() {
+	shutdownTelemetry, err := common.InitTelemetry(context.Background())
+	if err != nil {
+		log.Println("failed to initialize telemetry:", err)
+	} else {
+		defer func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := shutdownTelemetry(ctx); err != nil {
+				log.Println("failed to shut down telemetry:", err)
+			}
+		}()
+	}
 
 	db := common.Init()
 	Migrate(db)
@@ -33,6 +48,7 @@ func main() {
 	}
 
 	r := gin.Default()
+	r.Use(otelgin.Middleware("go-gin-realworld"), common.TelemetryMiddleware())
 
 	// Disable automatic redirect for trailing slashes
 	// This prevents POST body from being lost during redirects

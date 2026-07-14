@@ -53,6 +53,7 @@ func ProfileFollow(c *gin.Context) {
 		c.JSON(http.StatusUnprocessableEntity, common.NewError("database", err))
 		return
 	}
+	common.RecordProductAction(c, "profile.follow")
 	serializer := ProfileSerializer{c, userModel}
 	c.JSON(http.StatusOK, gin.H{"profile": serializer.Response()})
 }
@@ -71,6 +72,7 @@ func ProfileUnfollow(c *gin.Context) {
 		c.JSON(http.StatusUnprocessableEntity, common.NewError("database", err))
 		return
 	}
+	common.RecordProductAction(c, "profile.unfollow")
 	serializer := ProfileSerializer{c, userModel}
 	c.JSON(http.StatusOK, gin.H{"profile": serializer.Response()})
 }
@@ -87,6 +89,7 @@ func UsersRegistration(c *gin.Context) {
 		return
 	}
 	c.Set("my_user_model", userModelValidator.userModel)
+	common.RecordProductAction(c, "user.signup")
 	serializer := UserSerializer{c}
 	c.JSON(http.StatusCreated, gin.H{"user": serializer.Response()})
 }
