@@ -1,6 +1,7 @@
 package users
 
 import (
+	"context"
 	"errors"
 
 	"github.com/gothinkster/golang-gin-realworld-example-app/common"
@@ -77,8 +78,8 @@ func (u *UserModel) checkPassword(password string) error {
 // You could input the conditions and it will return an UserModel in database with error info.
 //
 //	userModel, err := FindOneUser(&UserModel{Username: "username0"})
-func FindOneUser(condition interface{}) (UserModel, error) {
-	db := common.GetDB()
+func FindOneUser(condition interface{}, ctx ...context.Context) (UserModel, error) {
+	db := common.GetDB(ctx...)
 	var model UserModel
 	err := db.Where(condition).First(&model).Error
 	return model, err
@@ -87,8 +88,8 @@ func FindOneUser(condition interface{}) (UserModel, error) {
 // You could input an UserModel which will be saved in database returning with error info
 //
 //	if err := SaveOne(&userModel); err != nil { ... }
-func SaveOne(data interface{}) error {
-	db := common.GetDB()
+func SaveOne(data interface{}, ctx ...context.Context) error {
+	db := common.GetDB(ctx...)
 	err := db.Save(data).Error
 	return err
 }
@@ -96,8 +97,8 @@ func SaveOne(data interface{}) error {
 // You could update properties of an UserModel to database returning with error info.
 //
 //	err := db.Model(userModel).Updates(UserModel{Username: "wangzitian0"}).Error
-func (model *UserModel) Update(data interface{}) error {
-	db := common.GetDB()
+func (model *UserModel) Update(data interface{}, ctx ...context.Context) error {
+	db := common.GetDB(ctx...)
 	err := db.Model(model).Updates(data).Error
 	return err
 }
@@ -105,8 +106,8 @@ func (model *UserModel) Update(data interface{}) error {
 // You could add a following relationship as userModel1 following userModel2
 //
 //	err = userModel1.following(userModel2)
-func (u UserModel) following(v UserModel) error {
-	db := common.GetDB()
+func (u UserModel) following(v UserModel, ctx ...context.Context) error {
+	db := common.GetDB(ctx...)
 	var follow FollowModel
 	err := db.FirstOrCreate(&follow, &FollowModel{
 		FollowingID:  v.ID,
@@ -118,8 +119,8 @@ func (u UserModel) following(v UserModel) error {
 // You could check whether  userModel1 following userModel2
 //
 //	followingBool = myUserModel.isFollowing(self.UserModel)
-func (u UserModel) isFollowing(v UserModel) bool {
-	db := common.GetDB()
+func (u UserModel) isFollowing(v UserModel, ctx ...context.Context) bool {
+	db := common.GetDB(ctx...)
 	var follow FollowModel
 	db.Where(FollowModel{
 		FollowingID:  v.ID,
@@ -131,8 +132,8 @@ func (u UserModel) isFollowing(v UserModel) bool {
 // You could delete a following relationship as userModel1 following userModel2
 //
 //	err = userModel1.unFollowing(userModel2)
-func (u UserModel) unFollowing(v UserModel) error {
-	db := common.GetDB()
+func (u UserModel) unFollowing(v UserModel, ctx ...context.Context) error {
+	db := common.GetDB(ctx...)
 	err := db.Where("following_id = ? AND followed_by_id = ?", v.ID, u.ID).Delete(&FollowModel{}).Error
 	return err
 }
@@ -140,8 +141,8 @@ func (u UserModel) unFollowing(v UserModel) error {
 // You could get a following list of userModel
 //
 //	followings := userModel.GetFollowings()
-func (u UserModel) GetFollowings() []UserModel {
-	db := common.GetDB()
+func (u UserModel) GetFollowings(ctx ...context.Context) []UserModel {
+	db := common.GetDB(ctx...)
 	var follows []FollowModel
 	var followings []UserModel
 	db.Preload("Following").Where(FollowModel{

@@ -2,9 +2,11 @@ package users
 
 import (
 	"errors"
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 	"github.com/gothinkster/golang-gin-realworld-example-app/common"
-	"net/http"
+	apptelemetry "github.com/gothinkster/golang-gin-realworld-example-app/internal/telemetry"
 )
 
 func UsersRegister(router *gin.RouterGroup) {
@@ -31,7 +33,7 @@ func ProfileRegister(router *gin.RouterGroup) {
 
 func ProfileRetrieve(c *gin.Context) {
 	username := c.Param("username")
-	userModel, err := FindOneUser(&UserModel{Username: username})
+	userModel, err := FindOneUser(&UserModel{Username: username}, c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusNotFound, common.NewError("profile", errors.New("Invalid username")))
 		return
@@ -42,36 +44,38 @@ func ProfileRetrieve(c *gin.Context) {
 
 func ProfileFollow(c *gin.Context) {
 	username := c.Param("username")
-	userModel, err := FindOneUser(&UserModel{Username: username})
+	userModel, err := FindOneUser(&UserModel{Username: username}, c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusNotFound, common.NewError("profile", errors.New("Invalid username")))
 		return
 	}
 	myUserModel := c.MustGet("my_user_model").(UserModel)
-	err = myUserModel.following(userModel)
+	err = myUserModel.following(userModel, c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusUnprocessableEntity, common.NewError("database", err))
 		return
 	}
 	serializer := ProfileSerializer{c, userModel}
+	apptelemetry.RecordProductEvent(c.Request.Context(), apptelemetry.EventProfileFollowed)
 	c.JSON(http.StatusOK, gin.H{"profile": serializer.Response()})
 }
 
 func ProfileUnfollow(c *gin.Context) {
 	username := c.Param("username")
-	userModel, err := FindOneUser(&UserModel{Username: username})
+	userModel, err := FindOneUser(&UserModel{Username: username}, c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusNotFound, common.NewError("profile", errors.New("Invalid username")))
 		return
 	}
 	myUserModel := c.MustGet("my_user_model").(UserModel)
 
-	err = myUserModel.unFollowing(userModel)
+	err = myUserModel.unFollowing(userModel, c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusUnprocessableEntity, common.NewError("database", err))
 		return
 	}
 	serializer := ProfileSerializer{c, userModel}
+	apptelemetry.RecordProductEvent(c.Request.Context(), apptelemetry.EventProfileUnfollowed)
 	c.JSON(http.StatusOK, gin.H{"profile": serializer.Response()})
 }
 
@@ -82,12 +86,13 @@ func UsersRegistration(c *gin.Context) {
 		return
 	}
 
-	if err := SaveOne(&userModelValidator.userModel); err != nil {
+	if err := SaveOne(&userModelValidator.userModel, c.Request.Context()); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, common.NewError("database", err))
 		return
 	}
 	c.Set("my_user_model", userModelValidator.userModel)
 	serializer := UserSerializer{c}
+	apptelemetry.RecordProductEvent(c.Request.Context(), apptelemetry.EventUserSignedUp)
 	c.JSON(http.StatusCreated, gin.H{"user": serializer.Response()})
 }
 
@@ -97,7 +102,7 @@ func UsersLogin(c *gin.Context) {
 		c.JSON(http.StatusUnprocessableEntity, common.NewValidatorError(err))
 		return
 	}
-	userModel, err := FindOneUser(&UserModel{Email: loginValidator.userModel.Email})
+	userModel, err := FindOneUser(&UserModel{Email: loginValidator.userModel.Email}, c.Request.Context())
 
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, common.NewError("login", errors.New("Not Registered email or invalid password")))
@@ -127,7 +132,7 @@ func UserUpdate(c *gin.Context) {
 	}
 
 	userModelValidator.userModel.ID = myUserModel.ID
-	if err := myUserModel.Update(userModelValidator.userModel); err != nil {
+	if err := myUserModel.Update(userModelValidator.userModel, c.Request.Context()); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, common.NewError("database", err))
 		return
 	}

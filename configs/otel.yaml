@@ -1,0 +1,29 @@
+file_format: "1.0"
+
+propagator:
+  composite:
+    - tracecontext:
+
+tracer_provider:
+  sampler:
+    parent_based:
+      root:
+        trace_id_ratio_based:
+          ratio: ${OTEL_TRACES_SAMPLER_ARG:-0.1}
+  processors:
+    - batch:
+        exporter:
+          otlp_http:
+            endpoint: "${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}"
+            headers_list: "${OTEL_EXPORTER_OTLP_HEADERS:-}"
+            compression: gzip
+
+meter_provider:
+  readers:
+    - periodic:
+        interval: 60000
+        exporter:
+          otlp_http:
+            endpoint: "${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}"
+            headers_list: "${OTEL_EXPORTER_OTLP_HEADERS:-}"
+            compression: gzip

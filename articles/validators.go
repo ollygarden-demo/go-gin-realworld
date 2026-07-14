@@ -43,8 +43,10 @@ func (s *ArticleModelValidator) Bind(c *gin.Context) error {
 	s.articleModel.Title = s.Article.Title
 	s.articleModel.Description = s.Article.Description
 	s.articleModel.Body = s.Article.Body
-	s.articleModel.Author = GetArticleUserModel(myUserModel)
-	s.articleModel.setTags(s.Article.Tags)
+	s.articleModel.Author = GetArticleUserModel(myUserModel, c.Request.Context())
+	if err := s.articleModel.setTags(s.Article.Tags, c.Request.Context()); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -67,6 +69,6 @@ func (s *CommentModelValidator) Bind(c *gin.Context) error {
 		return err
 	}
 	s.commentModel.Body = s.Comment.Body
-	s.commentModel.Author = GetArticleUserModel(myUserModel)
+	s.commentModel.Author = GetArticleUserModel(myUserModel, c.Request.Context())
 	return nil
 }

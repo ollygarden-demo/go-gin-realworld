@@ -1,6 +1,7 @@
 package articles
 
 import (
+	"context"
 	"strconv"
 
 	"github.com/gothinkster/golang-gin-realworld-example-app/common"
@@ -51,12 +52,12 @@ type CommentModel struct {
 	Body      string `gorm:"size:2048"`
 }
 
-func GetArticleUserModel(userModel users.UserModel) ArticleUserModel {
+func GetArticleUserModel(userModel users.UserModel, ctx ...context.Context) ArticleUserModel {
 	var articleUserModel ArticleUserModel
 	if userModel.ID == 0 {
 		return articleUserModel
 	}
-	db := common.GetDB()
+	db := common.GetDB(ctx...)
 	db.Where(&ArticleUserModel{
 		UserModelID: userModel.ID,
 	}).FirstOrCreate(&articleUserModel)
@@ -64,8 +65,8 @@ func GetArticleUserModel(userModel users.UserModel) ArticleUserModel {
 	return articleUserModel
 }
 
-func (article ArticleModel) favoritesCount() uint {
-	db := common.GetDB()
+func (article ArticleModel) favoritesCount(ctx ...context.Context) uint {
+	db := common.GetDB(ctx...)
 	var count int64
 	db.Model(&FavoriteModel{}).Where(FavoriteModel{
 		FavoriteID: article.ID,
@@ -73,8 +74,8 @@ func (article ArticleModel) favoritesCount() uint {
 	return uint(count)
 }
 
-func (article ArticleModel) isFavoriteBy(user ArticleUserModel) bool {
-	db := common.GetDB()
+func (article ArticleModel) isFavoriteBy(user ArticleUserModel, ctx ...context.Context) bool {
+	db := common.GetDB(ctx...)
 	var favorite FavoriteModel
 	db.Where(FavoriteModel{
 		FavoriteID:   article.ID,
@@ -84,11 +85,11 @@ func (article ArticleModel) isFavoriteBy(user ArticleUserModel) bool {
 }
 
 // BatchGetFavoriteCounts returns a map of article ID to favorite count
-func BatchGetFavoriteCounts(articleIDs []uint) map[uint]uint {
+func BatchGetFavoriteCounts(articleIDs []uint, ctx ...context.Context) map[uint]uint {
 	if len(articleIDs) == 0 {
 		return make(map[uint]uint)
 	}
-	db := common.GetDB()
+	db := common.GetDB(ctx...)
 
 	type result struct {
 		FavoriteID uint
@@ -109,11 +110,11 @@ func BatchGetFavoriteCounts(articleIDs []uint) map[uint]uint {
 }
 
 // BatchGetFavoriteStatus returns a map of article ID to whether the user favorited it
-func BatchGetFavoriteStatus(articleIDs []uint, userID uint) map[uint]bool {
+func BatchGetFavoriteStatus(articleIDs []uint, userID uint, ctx ...context.Context) map[uint]bool {
 	if len(articleIDs) == 0 || userID == 0 {
 		return make(map[uint]bool)
 	}
-	db := common.GetDB()
+	db := common.GetDB(ctx...)
 
 	var favorites []FavoriteModel
 	db.Where("favorite_id IN ? AND favorite_by_id = ?", articleIDs, userID).Find(&favorites)
@@ -125,8 +126,8 @@ func BatchGetFavoriteStatus(articleIDs []uint, userID uint) map[uint]bool {
 	return statusMap
 }
 
-func (article ArticleModel) favoriteBy(user ArticleUserModel) error {
-	db := common.GetDB()
+func (article ArticleModel) favoriteBy(user ArticleUserModel, ctx ...context.Context) error {
+	db := common.GetDB(ctx...)
 	var favorite FavoriteModel
 	err := db.FirstOrCreate(&favorite, &FavoriteModel{
 		FavoriteID:   article.ID,
@@ -135,47 +136,47 @@ func (article ArticleModel) favoriteBy(user ArticleUserModel) error {
 	return err
 }
 
-func (article ArticleModel) unFavoriteBy(user ArticleUserModel) error {
-	db := common.GetDB()
+func (article ArticleModel) unFavoriteBy(user ArticleUserModel, ctx ...context.Context) error {
+	db := common.GetDB(ctx...)
 	err := db.Where("favorite_id = ? AND favorite_by_id = ?", article.ID, user.ID).Delete(&FavoriteModel{}).Error
 	return err
 }
 
-func SaveOne(data interface{}) error {
-	db := common.GetDB()
+func SaveOne(data interface{}, ctx ...context.Context) error {
+	db := common.GetDB(ctx...)
 	err := db.Save(data).Error
 	return err
 }
 
-func FindOneArticle(condition interface{}) (ArticleModel, error) {
-	db := common.GetDB()
+func FindOneArticle(condition interface{}, ctx ...context.Context) (ArticleModel, error) {
+	db := common.GetDB(ctx...)
 	var model ArticleModel
 	err := db.Preload("Author.UserModel").Preload("Tags").Where(condition).First(&model).Error
 	return model, err
 }
 
-func FindOneComment(condition *CommentModel) (CommentModel, error) {
-	db := common.GetDB()
+func FindOneComment(condition *CommentModel, ctx ...context.Context) (CommentModel, error) {
+	db := common.GetDB(ctx...)
 	var model CommentModel
 	err := db.Preload("Author.UserModel").Preload("Article").Where(condition).First(&model).Error
 	return model, err
 }
 
-func (self *ArticleModel) getComments() error {
-	db := common.GetDB()
+func (self *ArticleModel) getComments(ctx ...context.Context) error {
+	db := common.GetDB(ctx...)
 	err := db.Preload("Author.UserModel").Model(self).Association("Comments").Find(&self.Comments)
 	return err
 }
 
-func getAllTags() ([]TagModel, error) {
-	db := common.GetDB()
+func getAllTags(ctx ...context.Context) ([]TagModel, error) {
+	db := common.GetDB(ctx...)
 	var models []TagModel
 	err := db.Find(&models).Error
 	return models, err
 }
 
-func FindManyArticle(tag, author, limit, offset, favorited string) ([]ArticleModel, int, error) {
-	db := common.GetDB()
+func FindManyArticle(tag, author, limit, offset, favorited string, ctx ...context.Context) ([]ArticleModel, int, error) {
+	db := common.GetDB(ctx...)
 	var models []ArticleModel
 	var count int
 
@@ -213,7 +214,7 @@ func FindManyArticle(tag, author, limit, offset, favorited string) ([]ArticleMod
 	} else if author != "" {
 		var userModel users.UserModel
 		tx.Where(users.UserModel{Username: author}).First(&userModel)
-		articleUserModel := GetArticleUserModel(userModel)
+		articleUserModel := GetArticleUserModel(userModel, ctx...)
 
 		if articleUserModel.ID != 0 {
 			count = int(tx.Model(&articleUserModel).Association("ArticleModels").Count())
@@ -235,7 +236,7 @@ func FindManyArticle(tag, author, limit, offset, favorited string) ([]ArticleMod
 	} else if favorited != "" {
 		var userModel users.UserModel
 		tx.Where(users.UserModel{Username: favorited}).First(&userModel)
-		articleUserModel := GetArticleUserModel(userModel)
+		articleUserModel := GetArticleUserModel(userModel, ctx...)
 		if articleUserModel.ID != 0 {
 			var favoriteModels []FavoriteModel
 			tx.Where(FavoriteModel{
@@ -263,8 +264,8 @@ func FindManyArticle(tag, author, limit, offset, favorited string) ([]ArticleMod
 	return models, count, err
 }
 
-func (self *ArticleUserModel) GetArticleFeed(limit, offset string) ([]ArticleModel, int, error) {
-	db := common.GetDB()
+func (self *ArticleUserModel) GetArticleFeed(limit, offset string, ctx ...context.Context) ([]ArticleModel, int, error) {
+	db := common.GetDB(ctx...)
 	models := make([]ArticleModel, 0)
 	var count int
 
@@ -278,7 +279,7 @@ func (self *ArticleUserModel) GetArticleFeed(limit, offset string) ([]ArticleMod
 	}
 
 	tx := db.Begin()
-	followings := self.UserModel.GetFollowings()
+	followings := self.UserModel.GetFollowings(ctx...)
 
 	// Batch get ArticleUserModel IDs to avoid N+1 query
 	if len(followings) > 0 {
@@ -307,13 +308,13 @@ func (self *ArticleUserModel) GetArticleFeed(limit, offset string) ([]ArticleMod
 	return models, count, err
 }
 
-func (model *ArticleModel) setTags(tags []string) error {
+func (model *ArticleModel) setTags(tags []string, ctx ...context.Context) error {
 	if len(tags) == 0 {
 		model.Tags = []TagModel{}
 		return nil
 	}
 
-	db := common.GetDB()
+	db := common.GetDB(ctx...)
 
 	// Batch fetch existing tags
 	var existingTags []TagModel
@@ -349,20 +350,20 @@ func (model *ArticleModel) setTags(tags []string) error {
 	return nil
 }
 
-func (model *ArticleModel) Update(data interface{}) error {
-	db := common.GetDB()
+func (model *ArticleModel) Update(data interface{}, ctx ...context.Context) error {
+	db := common.GetDB(ctx...)
 	err := db.Model(model).Updates(data).Error
 	return err
 }
 
-func DeleteArticleModel(condition interface{}) error {
-	db := common.GetDB()
+func DeleteArticleModel(condition interface{}, ctx ...context.Context) error {
+	db := common.GetDB(ctx...)
 	err := db.Where(condition).Delete(&ArticleModel{}).Error
 	return err
 }
 
-func DeleteCommentModel(condition interface{}) error {
-	db := common.GetDB()
+func DeleteCommentModel(condition interface{}, ctx ...context.Context) error {
+	db := common.GetDB(ctx...)
 	err := db.Where(condition).Delete(&CommentModel{}).Error
 	return err
 }

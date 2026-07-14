@@ -30,7 +30,7 @@ func extractToken(c *gin.Context) string {
 func UpdateContextUserModel(c *gin.Context, my_user_id uint) {
 	var myUserModel UserModel
 	if my_user_id != 0 {
-		db := common.GetDB()
+		db := common.GetDB(c.Request.Context())
 		db.First(&myUserModel, my_user_id)
 	}
 	c.Set("my_user_id", my_user_id)

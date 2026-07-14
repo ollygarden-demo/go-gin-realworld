@@ -32,7 +32,7 @@ func (self *ProfileSerializer) Response() ProfileResponse {
 		Username:  self.Username,
 		Bio:       self.Bio,
 		Image:     image,
-		Following: myUserModel.isFollowing(self.UserModel),
+		Following: myUserModel.isFollowing(self.UserModel, self.C.Request.Context()),
 	}
 	return profile
 }

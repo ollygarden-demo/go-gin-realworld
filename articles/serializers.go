@@ -65,6 +65,7 @@ type ArticlesSerializer struct {
 }
 
 func (s *ArticleSerializer) Response() ArticleResponse {
+	ctx := s.C.Request.Context()
 	myUserModel := s.C.MustGet("my_user_model").(users.UserModel)
 	authorSerializer := ArticleUserSerializer{C: s.C, ArticleUserModel: s.Author}
 	response := ArticleResponse{
@@ -77,8 +78,8 @@ func (s *ArticleSerializer) Response() ArticleResponse {
 		//UpdatedAt:      s.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt:      s.UpdatedAt.UTC().Format("2006-01-02T15:04:05.999Z"),
 		Author:         authorSerializer.Response(),
-		Favorite:       s.isFavoriteBy(GetArticleUserModel(myUserModel)),
-		FavoritesCount: s.favoritesCount(),
+		Favorite:       s.isFavoriteBy(GetArticleUserModel(myUserModel, ctx), ctx),
+		FavoritesCount: s.favoritesCount(ctx),
 	}
 	response.Tags = make([]string, 0)
 	for _, tag := range s.Tags {
@@ -125,11 +126,12 @@ func (s *ArticlesSerializer) Response() []ArticleResponse {
 		articleIDs = append(articleIDs, article.ID)
 	}
 
-	favoriteCounts := BatchGetFavoriteCounts(articleIDs)
+	ctx := s.C.Request.Context()
+	favoriteCounts := BatchGetFavoriteCounts(articleIDs, ctx)
 
 	myUserModel := s.C.MustGet("my_user_model").(users.UserModel)
-	articleUserModel := GetArticleUserModel(myUserModel)
-	favoriteStatus := BatchGetFavoriteStatus(articleIDs, articleUserModel.ID)
+	articleUserModel := GetArticleUserModel(myUserModel, ctx)
+	favoriteStatus := BatchGetFavoriteStatus(articleIDs, articleUserModel.ID, ctx)
 
 	for _, article := range s.Articles {
 		serializer := ArticleSerializer{C: s.C, ArticleModel: article}

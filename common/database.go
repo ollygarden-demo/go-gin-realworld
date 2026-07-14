@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	"gorm.io/plugin/opentelemetry/tracing"
 )
 
 type Database struct {
@@ -108,6 +110,13 @@ func TestDBFree(test_db *gorm.DB) error {
 }
 
 // Using this function to get a connection, you can create your connection pool here.
-func GetDB() *gorm.DB {
+func GetDB(ctx ...context.Context) *gorm.DB {
+	if len(ctx) > 0 && ctx[0] != nil {
+		return DB.WithContext(ctx[0])
+	}
 	return DB
+}
+
+func InstrumentDB(db *gorm.DB) error {
+	return db.Use(tracing.NewPlugin(tracing.WithoutQueryVariables()))
 }

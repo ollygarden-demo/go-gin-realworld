@@ -2,12 +2,14 @@ package articles
 
 import (
 	"errors"
-	"github.com/gin-gonic/gin"
-	"github.com/gothinkster/golang-gin-realworld-example-app/common"
-	"github.com/gothinkster/golang-gin-realworld-example-app/users"
-	"gorm.io/gorm"
 	"net/http"
 	"strconv"
+
+	"github.com/gin-gonic/gin"
+	"github.com/gothinkster/golang-gin-realworld-example-app/common"
+	apptelemetry "github.com/gothinkster/golang-gin-realworld-example-app/internal/telemetry"
+	"github.com/gothinkster/golang-gin-realworld-example-app/users"
+	"gorm.io/gorm"
 )
 
 func ArticlesRegister(router *gin.RouterGroup) {
@@ -43,11 +45,13 @@ func ArticleCreate(c *gin.Context) {
 	}
 	//fmt.Println(articleModelValidator.articleModel.Author.UserModel)
 
-	if err := SaveOne(&articleModelValidator.articleModel); err != nil {
+	if err := SaveOne(&articleModelValidator.articleModel, c.Request.Context()); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, common.NewError("database", err))
 		return
 	}
 	serializer := ArticleSerializer{c, articleModelValidator.articleModel}
+	apptelemetry.RecordProductEvent(c.Request.Context(), apptelemetry.EventArticleCreated)
+	apptelemetry.RecordArticleTagCount(c.Request.Context(), len(articleModelValidator.articleModel.Tags))
 	c.JSON(http.StatusCreated, gin.H{"article": serializer.Response()})
 }
 
@@ -58,12 +62,15 @@ func ArticleList(c *gin.Context) {
 	favorited := c.Query("favorited")
 	limit := c.Query("limit")
 	offset := c.Query("offset")
-	articleModels, modelCount, err := FindManyArticle(tag, author, limit, offset, favorited)
+	articleModels, modelCount, err := FindManyArticle(tag, author, limit, offset, favorited, c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusNotFound, common.NewError("articles", errors.New("Invalid param")))
 		return
 	}
 	serializer := ArticlesSerializer{c, articleModels}
+	if tag != "" {
+		apptelemetry.RecordProductEvent(c.Request.Context(), apptelemetry.EventArticleTagFiltered)
+	}
 	c.JSON(http.StatusOK, gin.H{"articles": serializer.Response(), "articlesCount": modelCount})
 }
 
@@ -75,8 +82,8 @@ func ArticleFeed(c *gin.Context) {
 		c.AbortWithError(http.StatusUnauthorized, errors.New("{error : \"Require auth!\"}"))
 		return
 	}
-	articleUserModel := GetArticleUserModel(myUserModel)
-	articleModels, modelCount, err := articleUserModel.GetArticleFeed(limit, offset)
+	articleUserModel := GetArticleUserModel(myUserModel, c.Request.Context())
+	articleModels, modelCount, err := articleUserModel.GetArticleFeed(limit, offset, c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusNotFound, common.NewError("articles", errors.New("Invalid param")))
 		return
@@ -87,7 +94,7 @@ func ArticleFeed(c *gin.Context) {
 
 func ArticleRetrieve(c *gin.Context) {
 	slug := c.Param("slug")
-	articleModel, err := FindOneArticle(&ArticleModel{Slug: slug})
+	articleModel, err := FindOneArticle(&ArticleModel{Slug: slug}, c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusNotFound, common.NewError("articles", errors.New("Invalid slug")))
 		return
@@ -98,14 +105,14 @@ func ArticleRetrieve(c *gin.Context) {
 
 func ArticleUpdate(c *gin.Context) {
 	slug := c.Param("slug")
-	articleModel, err := FindOneArticle(&ArticleModel{Slug: slug})
+	articleModel, err := FindOneArticle(&ArticleModel{Slug: slug}, c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusNotFound, common.NewError("articles", errors.New("Invalid slug")))
 		return
 	}
 	// Check if current user is the author
 	myUserModel := c.MustGet("my_user_model").(users.UserModel)
-	articleUserModel := GetArticleUserModel(myUserModel)
+	articleUserModel := GetArticleUserModel(myUserModel, c.Request.Context())
 	if articleModel.AuthorID != articleUserModel.ID {
 		c.JSON(http.StatusForbidden, common.NewError("article", errors.New("you are not the author")))
 		return
@@ -118,7 +125,7 @@ func ArticleUpdate(c *gin.Context) {
 	}
 
 	articleModelValidator.articleModel.ID = articleModel.ID
-	if err := articleModel.Update(articleModelValidator.articleModel); err != nil {
+	if err := articleModel.Update(articleModelValidator.articleModel, c.Request.Context()); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, common.NewError("database", err))
 		return
 	}
@@ -128,59 +135,62 @@ func ArticleUpdate(c *gin.Context) {
 
 func ArticleDelete(c *gin.Context) {
 	slug := c.Param("slug")
-	articleModel, err := FindOneArticle(&ArticleModel{Slug: slug})
+	articleModel, err := FindOneArticle(&ArticleModel{Slug: slug}, c.Request.Context())
 	if err == nil {
 		// Article exists, check authorization
 		myUserModel := c.MustGet("my_user_model").(users.UserModel)
-		articleUserModel := GetArticleUserModel(myUserModel)
+		articleUserModel := GetArticleUserModel(myUserModel, c.Request.Context())
 		if articleModel.AuthorID != articleUserModel.ID {
 			c.JSON(http.StatusForbidden, common.NewError("article", errors.New("you are not the author")))
 			return
 		}
 	}
 	// Delete regardless of existence (idempotent)
-	if err := DeleteArticleModel(&ArticleModel{Slug: slug}); err != nil {
+	if err := DeleteArticleModel(&ArticleModel{Slug: slug}, c.Request.Context()); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, common.NewError("database", err))
 		return
 	}
+	apptelemetry.RecordProductEvent(c.Request.Context(), apptelemetry.EventArticleDeleted)
 	c.JSON(http.StatusOK, gin.H{"article": "delete success"})
 }
 
 func ArticleFavorite(c *gin.Context) {
 	slug := c.Param("slug")
-	articleModel, err := FindOneArticle(&ArticleModel{Slug: slug})
+	articleModel, err := FindOneArticle(&ArticleModel{Slug: slug}, c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusNotFound, common.NewError("articles", errors.New("Invalid slug")))
 		return
 	}
 	myUserModel := c.MustGet("my_user_model").(users.UserModel)
-	if err = articleModel.favoriteBy(GetArticleUserModel(myUserModel)); err != nil {
+	if err = articleModel.favoriteBy(GetArticleUserModel(myUserModel, c.Request.Context()), c.Request.Context()); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, common.NewError("database", err))
 		return
 	}
 	serializer := ArticleSerializer{c, articleModel}
+	apptelemetry.RecordProductEvent(c.Request.Context(), apptelemetry.EventArticleFavorited)
 	c.JSON(http.StatusOK, gin.H{"article": serializer.Response()})
 }
 
 func ArticleUnfavorite(c *gin.Context) {
 	slug := c.Param("slug")
-	articleModel, err := FindOneArticle(&ArticleModel{Slug: slug})
+	articleModel, err := FindOneArticle(&ArticleModel{Slug: slug}, c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusNotFound, common.NewError("articles", errors.New("Invalid slug")))
 		return
 	}
 	myUserModel := c.MustGet("my_user_model").(users.UserModel)
-	if err = articleModel.unFavoriteBy(GetArticleUserModel(myUserModel)); err != nil {
+	if err = articleModel.unFavoriteBy(GetArticleUserModel(myUserModel, c.Request.Context()), c.Request.Context()); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, common.NewError("database", err))
 		return
 	}
 	serializer := ArticleSerializer{c, articleModel}
+	apptelemetry.RecordProductEvent(c.Request.Context(), apptelemetry.EventArticleUnfavorited)
 	c.JSON(http.StatusOK, gin.H{"article": serializer.Response()})
 }
 
 func ArticleCommentCreate(c *gin.Context) {
 	slug := c.Param("slug")
-	articleModel, err := FindOneArticle(&ArticleModel{Slug: slug})
+	articleModel, err := FindOneArticle(&ArticleModel{Slug: slug}, c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusNotFound, common.NewError("comment", errors.New("Invalid slug")))
 		return
@@ -192,11 +202,12 @@ func ArticleCommentCreate(c *gin.Context) {
 	}
 	commentModelValidator.commentModel.Article = articleModel
 
-	if err := SaveOne(&commentModelValidator.commentModel); err != nil {
+	if err := SaveOne(&commentModelValidator.commentModel, c.Request.Context()); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, common.NewError("database", err))
 		return
 	}
 	serializer := CommentSerializer{c, commentModelValidator.commentModel}
+	apptelemetry.RecordProductEvent(c.Request.Context(), apptelemetry.EventCommentCreated)
 	c.JSON(http.StatusCreated, gin.H{"comment": serializer.Response()})
 }
 
@@ -207,32 +218,33 @@ func ArticleCommentDelete(c *gin.Context) {
 		return
 	}
 	id := uint(id64)
-	commentModel, err := FindOneComment(&CommentModel{Model: gorm.Model{ID: id}})
+	commentModel, err := FindOneComment(&CommentModel{Model: gorm.Model{ID: id}}, c.Request.Context())
 	if err == nil {
 		// Comment exists, check authorization
 		myUserModel := c.MustGet("my_user_model").(users.UserModel)
-		articleUserModel := GetArticleUserModel(myUserModel)
+		articleUserModel := GetArticleUserModel(myUserModel, c.Request.Context())
 		if commentModel.AuthorID != articleUserModel.ID {
 			c.JSON(http.StatusForbidden, common.NewError("comment", errors.New("you are not the author")))
 			return
 		}
 	}
 	// Delete regardless of existence (idempotent)
-	if err := DeleteCommentModel([]uint{id}); err != nil {
+	if err := DeleteCommentModel([]uint{id}, c.Request.Context()); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, common.NewError("database", err))
 		return
 	}
+	apptelemetry.RecordProductEvent(c.Request.Context(), apptelemetry.EventCommentDeleted)
 	c.JSON(http.StatusOK, gin.H{"comment": "delete success"})
 }
 
 func ArticleCommentList(c *gin.Context) {
 	slug := c.Param("slug")
-	articleModel, err := FindOneArticle(&ArticleModel{Slug: slug})
+	articleModel, err := FindOneArticle(&ArticleModel{Slug: slug}, c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusNotFound, common.NewError("comments", errors.New("Invalid slug")))
 		return
 	}
-	err = articleModel.getComments()
+	err = articleModel.getComments(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusNotFound, common.NewError("comments", errors.New("Database error")))
 		return
@@ -241,11 +253,12 @@ func ArticleCommentList(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"comments": serializer.Response()})
 }
 func TagList(c *gin.Context) {
-	tagModels, err := getAllTags()
+	tagModels, err := getAllTags(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusNotFound, common.NewError("articles", errors.New("Invalid param")))
 		return
 	}
 	serializer := TagsSerializer{c, tagModels}
+	apptelemetry.RecordProductEvent(c.Request.Context(), apptelemetry.EventTagsListed)
 	c.JSON(http.StatusOK, gin.H{"tags": serializer.Response()})
 }
