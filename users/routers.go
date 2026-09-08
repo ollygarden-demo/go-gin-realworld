@@ -82,7 +82,7 @@ func UsersRegistration(c *gin.Context) {
 		return
 	}
 
-	if err := SaveOne(&userModelValidator.userModel); err != nil {
+	if err := SaveOne(c.Request.Context(), &userModelValidator.userModel); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, common.NewError("database", err))
 		return
 	}

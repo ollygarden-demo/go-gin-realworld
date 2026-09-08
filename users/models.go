@@ -1,6 +1,7 @@
 package users
 
 import (
+	"context"
 	"errors"
 
 	"github.com/gothinkster/golang-gin-realworld-example-app/common"
@@ -86,9 +87,9 @@ func FindOneUser(condition interface{}) (UserModel, error) {
 
 // You could input an UserModel which will be saved in database returning with error info
 //
-//	if err := SaveOne(&userModel); err != nil { ... }
-func SaveOne(data interface{}) error {
-	db := common.GetDB()
+//	if err := SaveOne(ctx, &userModel); err != nil { ... }
+func SaveOne(ctx context.Context, data interface{}) error {
+	db := common.GetDB().WithContext(ctx)
 	err := db.Save(data).Error
 	return err
 }
