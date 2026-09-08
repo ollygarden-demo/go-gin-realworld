@@ -78,7 +78,7 @@ go tool cover -func=coverage.out
 
 ## Install Golang
 
-Make sure you have Go 1.21 or higher installed.
+Make sure you have Go 1.25 or higher installed.
 
 https://golang.org/doc/install
 
@@ -115,6 +115,25 @@ go build ./...
 go test ./...
 go mod tidy
 ```
+
+## OpenTelemetry compile-time instrumentation
+
+The repository pins OpenTelemetry Go Compile-Time Instrumentation (`otelc`) as a Go tool dependency. Build the instrumented application without changing its source code:
+
+```bash
+go tool otelc go build -o bin/realworld .
+```
+
+The binary uses standard OpenTelemetry environment variables. For example:
+
+```bash
+OTEL_SERVICE_NAME=go-gin-realworld \
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 \
+OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf \
+./bin/realworld
+```
+
+The build writes its generated files to `.otelc-build/`. Inspect `.otelc-build/matched.json` to verify which instrumentation rules matched the application.
 
 ## Run the Server
 ```bash

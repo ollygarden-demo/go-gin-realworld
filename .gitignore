@@ -31,6 +31,8 @@ coverage.txt
 coverage.out
 profile.out
 results.sarif
+.otelc-build/
+/bin/realworld
 
 # Environment files (keep .env.example)
 .env
