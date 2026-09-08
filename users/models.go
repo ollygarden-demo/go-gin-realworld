@@ -77,9 +77,9 @@ func (u *UserModel) checkPassword(password string) error {
 
 // You could input the conditions and it will return an UserModel in database with error info.
 //
-//	userModel, err := FindOneUser(&UserModel{Username: "username0"})
-func FindOneUser(condition interface{}) (UserModel, error) {
-	db := common.GetDB()
+//	userModel, err := FindOneUser(ctx, &UserModel{Username: "username0"})
+func FindOneUser(ctx context.Context, condition interface{}) (UserModel, error) {
+	db := common.GetDB().WithContext(ctx)
 	var model UserModel
 	err := db.Where(condition).First(&model).Error
 	return model, err

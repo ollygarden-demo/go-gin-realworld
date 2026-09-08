@@ -31,7 +31,7 @@ func ProfileRegister(router *gin.RouterGroup) {
 
 func ProfileRetrieve(c *gin.Context) {
 	username := c.Param("username")
-	userModel, err := FindOneUser(&UserModel{Username: username})
+	userModel, err := FindOneUser(c.Request.Context(), &UserModel{Username: username})
 	if err != nil {
 		c.JSON(http.StatusNotFound, common.NewError("profile", errors.New("Invalid username")))
 		return
@@ -42,7 +42,7 @@ func ProfileRetrieve(c *gin.Context) {
 
 func ProfileFollow(c *gin.Context) {
 	username := c.Param("username")
-	userModel, err := FindOneUser(&UserModel{Username: username})
+	userModel, err := FindOneUser(c.Request.Context(), &UserModel{Username: username})
 	if err != nil {
 		c.JSON(http.StatusNotFound, common.NewError("profile", errors.New("Invalid username")))
 		return
@@ -59,7 +59,7 @@ func ProfileFollow(c *gin.Context) {
 
 func ProfileUnfollow(c *gin.Context) {
 	username := c.Param("username")
-	userModel, err := FindOneUser(&UserModel{Username: username})
+	userModel, err := FindOneUser(c.Request.Context(), &UserModel{Username: username})
 	if err != nil {
 		c.JSON(http.StatusNotFound, common.NewError("profile", errors.New("Invalid username")))
 		return
@@ -97,7 +97,7 @@ func UsersLogin(c *gin.Context) {
 		c.JSON(http.StatusUnprocessableEntity, common.NewValidatorError(err))
 		return
 	}
-	userModel, err := FindOneUser(&UserModel{Email: loginValidator.userModel.Email})
+	userModel, err := FindOneUser(c.Request.Context(), &UserModel{Email: loginValidator.userModel.Email})
 
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, common.NewError("login", errors.New("Not Registered email or invalid password")))
