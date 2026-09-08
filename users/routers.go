@@ -2,9 +2,11 @@ package users
 
 import (
 	"errors"
+	"log"
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 	"github.com/gothinkster/golang-gin-realworld-example-app/common"
-	"net/http"
 )
 
 func UsersRegister(router *gin.RouterGroup) {
@@ -105,6 +107,7 @@ func UsersLogin(c *gin.Context) {
 	}
 
 	if userModel.checkPassword(loginValidator.User.Password) != nil {
+		log.Printf("login failed for email %s", loginValidator.userModel.Email)
 		c.JSON(http.StatusUnauthorized, common.NewError("login", errors.New("Not Registered email or invalid password")))
 		return
 	}
