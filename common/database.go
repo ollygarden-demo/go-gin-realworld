@@ -2,8 +2,10 @@ package common
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -45,6 +47,18 @@ func ensureDir(filePath string) error {
 	return nil
 }
 
+// newLogger builds a GORM logger that never renders bound parameters as
+// literals, so user data (emails, bcrypt hashes) can't leak into the logs
+// through slow-query or error traces.
+func newLogger(level logger.LogLevel) logger.Interface {
+	return logger.New(log.New(os.Stdout, "\r\n", log.LstdFlags), logger.Config{
+		SlowThreshold:             200 * time.Millisecond,
+		LogLevel:                  level,
+		IgnoreRecordNotFoundError: true,
+		ParameterizedQueries:      true,
+	})
+}
+
 // Opening a database and save the reference to `Database` struct.
 func Init() *gorm.DB {
 	dbPath := GetDBPath()
@@ -54,7 +68,9 @@ func Init() *gorm.DB {
 		fmt.Println("db err: (Init - create dir) ", err)
 	}
 
-	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(dbPath), &gorm.Config{
+		Logger: newLogger(logger.Warn),
+	})
 	if err != nil {
 		fmt.Println("db err: (Init) ", err)
 	}
@@ -78,7 +94,7 @@ func TestDBInit() *gorm.DB {
 	}
 
 	test_db, err := gorm.Open(sqlite.Open(testDBPath), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger: newLogger(logger.Info),
 	})
 	if err != nil {
 		fmt.Println("db err: (TestDBInit) ", err)

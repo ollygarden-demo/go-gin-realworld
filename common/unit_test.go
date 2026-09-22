@@ -366,3 +366,41 @@ func TestDatabaseWithCurrentDirectory(t *testing.T) {
 	sqlDB.Close()
 	os.Remove("test_simple.db")
 }
+
+func TestLoggerDoesNotLogQueryParameters(t *testing.T) {
+	asserts := assert.New(t)
+
+	// Capture everything the GORM logger writes to stdout.
+	origStdout := os.Stdout
+	r, w, err := os.Pipe()
+	asserts.NoError(err)
+	os.Stdout = w
+
+	type LogUser struct {
+		ID    uint `gorm:"primaryKey"`
+		Email string
+	}
+
+	db := TestDBInit()
+	asserts.NoError(db.AutoMigrate(&LogUser{}))
+	// A lookup that finds nothing: normal traffic on the login path.
+	notFound := db.Where(&LogUser{Email: "alice@example.com"}).First(&LogUser{}).Error
+	// A statement that fails: the bound values must not be rendered either.
+	failing := db.Exec("INSERT INTO non_existent_tables (email) VALUES (?)", "bob@example.com").Error
+	TestDBFree(db)
+
+	os.Stdout = origStdout
+	w.Close()
+	var buf bytes.Buffer
+	_, err = buf.ReadFrom(r)
+	asserts.NoError(err)
+	logged := buf.String()
+
+	asserts.Error(notFound, "Lookup should report record not found")
+	asserts.Error(failing, "Insert into a missing table should fail")
+	asserts.Contains(logged, "log_users", "Statements should still be traced")
+	asserts.Contains(logged, "?", "Parameters should be rendered as placeholders")
+	asserts.NotContains(logged, "alice@example.com", "Logs should not contain query parameters")
+	asserts.NotContains(logged, "bob@example.com", "Logs should not contain query parameters")
+	asserts.NotContains(logged, "record not found", "Record not found should not be logged")
+}
